@@ -46,11 +46,12 @@ const rowsUnder = (expander, title) => walk(expander).filter(w =>
     w instanceof Adw.SpinRow && w.title === title);
 const overrideRow = (expander, title) => {
     const row = walk(expander).find(w =>
-        w instanceof Adw.ActionRow && !(w instanceof Adw.SpinRow) &&
-        w.title === title);
+        w instanceof Adw.SpinRow && w.title === title);
     return {
         row,
-        spin: walk(row).find(w => w instanceof Gtk.SpinButton),
+        // The value lives on the row itself; the reset button is an extra
+        // suffix alongside the row's own spin buttons.
+        spin: row,
         reset: walk(row).find(w => w instanceof Gtk.Button &&
             w.icon_name === 'edit-undo-symbolic'),
     };
@@ -91,6 +92,10 @@ const height = overrideRow(dp6, 'Panel Height');
 // rather than jumping to the bottom of the schema range.
 check('override row starts at the effective value', height.spin.get_value(), 43);
 check('an untouched row offers no reset', height.reset.visible, false);
+// A plain Gtk.SpinButton in an ActionRow renders with square buttons; the
+// native row keeps the rounded ones the rest of the page uses.
+check('override rows are native spin rows',
+    height.row instanceof Adw.SpinRow, true);
 height.spin.set_value(40);
 check('override stored', stored()['DP-6'].overrides, {'panel-height': 40});
 check('override shrinks the icon in the subtitle',

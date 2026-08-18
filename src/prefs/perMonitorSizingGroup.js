@@ -139,11 +139,8 @@ export function addPerMonitorSizingGroup({page, settings, connectSettings}) {
         // it; its reset button hands it back to the scale.
         const overrideRows = [];
         for (const {key, lower, upper} of SIZING_KEYS) {
-            const row = new Adw.ActionRow({title: overrideTitle(key)});
-            const spin = Gtk.SpinButton.new_with_range(lower, upper, 1);
-            spin.valign = Gtk.Align.CENTER;
-            spin.numeric = true;
-            spin.width_chars = 3;
+            const row = Adw.SpinRow.new_with_range(lower, upper, 1);
+            row.title = overrideTitle(key);
             const reset = new Gtk.Button({
                 icon_name: 'edit-undo-symbolic',
                 valign: Gtk.Align.CENTER,
@@ -155,31 +152,30 @@ export function addPerMonitorSizingGroup({page, settings, connectSettings}) {
                     delete current.overrides[key];
                 });
             });
-            spin.connect('value-changed', () => {
+            row.connect('notify::value', widget => {
                 if (syncing)
                     return;
 
-                const value = Math.round(spin.get_value());
+                const value = Math.round(widget.get_value());
                 updateEntry(connector, current => {
                     current.overrides[key] = value;
                 });
             });
-            row.add_suffix(spin);
             row.add_suffix(reset);
             advanced.add_row(row);
-            overrideRows.push({key, row, spin, reset});
+            overrideRows.push({key, row, reset});
         }
 
         // Must be called with `syncing` held, since it writes to the spins.
         const syncOverrideRows = entry => {
             const resolved = resolveSizing(settings, connector);
             scaleSubtitle(entry);
-            for (const {key, row, spin, reset} of overrideRows) {
+            for (const {key, row, reset} of overrideRows) {
                 const override = entry.overrides[key];
                 const overridden = Number.isFinite(override);
                 const value = overridden ? override : resolved[key];
-                if (Math.round(spin.get_value()) !== value)
-                    spin.set_value(value);
+                if (Math.round(row.get_value()) !== value)
+                    row.set_value(value);
                 reset.visible = overridden;
                 row.subtitle = overridden
                     ? _('Overriding the scale')
