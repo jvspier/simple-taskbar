@@ -28,6 +28,12 @@ const ExtPrefs = await import(
 ExtPrefs.ExtensionPreferences.lookupByUUID = () => prefs;
 ExtPrefs.ExtensionPreferences.lookupByURL = () => prefs;
 
+// Drive a throwaway settings store so a failure part way through can never
+// leave the real configuration modified.
+const {createIsolatedSettings} = await import('./testSettings.js');
+const isolated = createIsolatedSettings(DIR);
+prefs.getSettings = () => isolated;
+
 const window = new Adw.PreferencesWindow();
 prefs.fillPreferencesWindow(window);
 

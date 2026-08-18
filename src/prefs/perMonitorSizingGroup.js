@@ -9,6 +9,7 @@ import {gettext as _} from 'resource:///org/gnome/Shell/Extensions/js/extensions
 
 import {
     getMonitorEntry,
+    globalSizing,
     MAXIMUM_SCALE,
     MINIMUM_SCALE,
     readMonitorSizing,
@@ -97,6 +98,22 @@ export function addPerMonitorSizingGroup({page, settings, connectSettings}) {
         scaleRow.subtitle = _(
             'Percentage applied to the global sizing values'
         );
+        // Scaling stops at the same limits the global settings use, so a
+        // large scale can quietly stop having any effect. Say so.
+        const scaleSubtitle = current => {
+            const base = globalSizing(settings);
+            const capped = SIZING_KEYS.some(({key, lower, upper, automatic}) => {
+                if (base[key] === automatic ||
+                    Number.isFinite(current.overrides[key]))
+                    return false;
+
+                const scaled = Math.round(base[key] * current.scale / 100);
+                return scaled > upper || scaled < lower;
+            });
+            scaleRow.subtitle = capped
+                ? _('Percentage applied to the global sizing values · already at the size limit')
+                : _('Percentage applied to the global sizing values');
+        };
         scaleRow.set_value(entry.scale);
         scaleRow.connect('notify::value', row => {
             if (syncing)
@@ -116,39 +133,57 @@ export function addPerMonitorSizingGroup({page, settings, connectSettings}) {
         });
         expander.add_row(advanced);
 
-        // Each override row keeps one value below its usable range as an
-        // "automatic" sentinel, the same convention the global button
-        // padding setting uses. The subtitle spells out which value is
-        // actually in effect so the sentinel never has to be guessed.
+        // Every override row shows the value that is actually in effect,
+        // whether it came from the scale or from an override, so stepping a
+        // row always moves from what the user can see. Touching a row pins
+        // it; its reset button hands it back to the scale.
         const overrideRows = [];
         for (const {key, lower, upper} of SIZING_KEYS) {
-            const sentinel = lower - 1;
-            const row = Adw.SpinRow.new_with_range(sentinel, upper, 1);
-            row.title = overrideTitle(key);
-            const override = entry.overrides[key];
-            row.set_value(Number.isFinite(override) ? override : sentinel);
-            row.connect('notify::value', widget => {
+            const row = new Adw.ActionRow({title: overrideTitle(key)});
+            const spin = Gtk.SpinButton.new_with_range(lower, upper, 1);
+            spin.valign = Gtk.Align.CENTER;
+            spin.numeric = true;
+            spin.width_chars = 3;
+            const reset = new Gtk.Button({
+                icon_name: 'edit-undo-symbolic',
+                valign: Gtk.Align.CENTER,
+                tooltip_text: _('Follow the scale again'),
+                css_classes: ['flat'],
+            });
+            reset.connect('clicked', () => {
+                updateEntry(connector, current => {
+                    delete current.overrides[key];
+                });
+            });
+            spin.connect('value-changed', () => {
                 if (syncing)
                     return;
 
-                const value = Math.round(widget.get_value());
+                const value = Math.round(spin.get_value());
                 updateEntry(connector, current => {
-                    if (value === sentinel)
-                        delete current.overrides[key];
-                    else
-                        current.overrides[key] = value;
+                    current.overrides[key] = value;
                 });
             });
+            row.add_suffix(spin);
+            row.add_suffix(reset);
             advanced.add_row(row);
-            overrideRows.push({key, row, sentinel});
+            overrideRows.push({key, row, spin, reset});
         }
 
-        const syncOverrideSubtitles = () => {
+        // Must be called with `syncing` held, since it writes to the spins.
+        const syncOverrideRows = entry => {
             const resolved = resolveSizing(settings, connector);
-            for (const {key, row, sentinel} of overrideRows) {
-                row.subtitle = row.get_value() === sentinel
-                    ? `${_('Automatic')} · ${resolved[key]}`
-                    : _('Overriding the scaled value');
+            scaleSubtitle(entry);
+            for (const {key, row, spin, reset} of overrideRows) {
+                const override = entry.overrides[key];
+                const overridden = Number.isFinite(override);
+                const value = overridden ? override : resolved[key];
+                if (Math.round(spin.get_value()) !== value)
+                    spin.set_value(value);
+                reset.visible = overridden;
+                row.subtitle = overridden
+                    ? _('Overriding the scale')
+                    : _('Following the scale');
             }
         };
 
@@ -179,21 +214,19 @@ export function addPerMonitorSizingGroup({page, settings, connectSettings}) {
                 expander.enable_expansion = current.enabled;
                 if (scaleRow.get_value() !== current.scale)
                     scaleRow.set_value(current.scale);
-                for (const {key, row, sentinel} of overrideRows) {
-                    const value = Number.isFinite(current.overrides[key])
-                        ? current.overrides[key]
-                        : sentinel;
-                    if (row.get_value() !== value)
-                        row.set_value(value);
-                }
+                syncOverrideRows(current);
             } finally {
                 syncing = false;
             }
             syncSubtitle();
-            syncOverrideSubtitles();
         };
 
-        syncOverrideSubtitles();
+        syncing = true;
+        try {
+            syncOverrideRows(entry);
+        } finally {
+            syncing = false;
+        }
         return {row: expander, sync};
     };
 

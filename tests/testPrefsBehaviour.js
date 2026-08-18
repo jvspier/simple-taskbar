@@ -20,9 +20,13 @@ const ExtPrefs = await import(
 ExtPrefs.ExtensionPreferences.lookupByUUID = () => prefs;
 ExtPrefs.ExtensionPreferences.lookupByURL = () => prefs;
 
-const settings = prefs.getSettings();
-const ORIGINAL = settings.get_string('per-monitor-sizing');
-settings.set_string('per-monitor-sizing', '{}');
+// Drive a throwaway settings store so a failure part way through can never
+// leave the real configuration modified.
+const {createIsolatedSettings} = await import('./testSettings.js');
+const isolated = createIsolatedSettings(DIR);
+prefs.getSettings = () => isolated;
+
+const settings = isolated;
 
 const window = new Adw.PreferencesWindow();
 prefs.fillPreferencesWindow(window);
@@ -36,9 +40,21 @@ function walk(w, out = []) {
 const all = () => walk(window);
 const expanderFor = connector => all().find(w =>
     w instanceof Adw.ExpanderRow && w.subtitle?.startsWith(`${connector} ·`));
-// Rows belonging to one monitor's expander subtree.
+// The scale is still an Adw.SpinRow; override rows are ActionRows carrying a
+// SpinButton and a reset button.
 const rowsUnder = (expander, title) => walk(expander).filter(w =>
     w instanceof Adw.SpinRow && w.title === title);
+const overrideRow = (expander, title) => {
+    const row = walk(expander).find(w =>
+        w instanceof Adw.ActionRow && !(w instanceof Adw.SpinRow) &&
+        w.title === title);
+    return {
+        row,
+        spin: walk(row).find(w => w instanceof Gtk.SpinButton),
+        reset: walk(row).find(w => w instanceof Gtk.Button &&
+            w.icon_name === 'edit-undo-symbolic'),
+    };
+};
 
 let failures = 0;
 const check = (name, actual, expected) => {
@@ -70,24 +86,36 @@ check('eDP-1 still global',
     expanderFor('eDP-1').subtitle, 'eDP-1 · 1920×1200 · Panel 62 px · Icons 43 px');
 
 // --- explicit override
-const heightRow = rowsUnder(dp6, 'Panel Height')[0];
-check('override starts at the Auto sentinel', heightRow.get_value(), 29);
-heightRow.set_value(40);
+const height = overrideRow(dp6, 'Panel Height');
+// The row must show what is in effect, so stepping it moves from there
+// rather than jumping to the bottom of the schema range.
+check('override row starts at the effective value', height.spin.get_value(), 43);
+check('an untouched row offers no reset', height.reset.visible, false);
+height.spin.set_value(40);
 check('override stored', stored()['DP-6'].overrides, {'panel-height': 40});
 check('override shrinks the icon in the subtitle',
     dp6.subtitle, 'DP-6 · 1080×1920 · Panel 40 px · Icons 23 px');
 
-// --- the automatic sentinel is explained in the row subtitle
-const spacingRow = rowsUnder(dp6, 'Icon Spacing')[0];
-check('sentinel row explains the effective value',
-    spacingRow.subtitle, 'Automatic · 2');
-check('overridden row says so',
-    rowsUnder(dp6, 'Panel Height')[0].subtitle, 'Overriding the scaled value');
-spacingRow.set_value(5);
-check('changing an override updates its subtitle',
-    spacingRow.subtitle, 'Overriding the scaled value');
-spacingRow.set_value(-6);
-check('back to automatic', spacingRow.subtitle, 'Automatic · 2');
+// --- rows say whether they follow the scale, and offer a reset when pinned
+const spacing = overrideRow(dp6, 'Icon Spacing');
+check('an untouched row follows the scale',
+    spacing.row.subtitle, 'Following the scale');
+check('a pinned row says it overrides',
+    height.row.subtitle, 'Overriding the scale');
+check('a pinned row offers a reset', height.reset.visible, true);
+// Pinning the height shrinks the automatic icon size to fit, which has to be
+// visible in the icon row rather than happening silently.
+check('icon row follows the pinned height down',
+    overrideRow(dp6, 'Icon Size').spin.get_value(), 23);
+spacing.spin.set_value(5);
+check('editing a row pins it', spacing.row.subtitle, 'Overriding the scale');
+check('edit stored', stored()['DP-6'].overrides['icon-spacing'], 5);
+spacing.reset.emit('clicked');
+check('reset hands the row back to the scale',
+    spacing.row.subtitle, 'Following the scale');
+check('reset drops only that override',
+    stored()['DP-6'].overrides, {'panel-height': 40});
+check('reset restores the scaled value', spacing.spin.get_value(), 2);
 
 // --- clearing overrides
 const clearButton = walk(dp6).find(w =>
@@ -95,9 +123,10 @@ const clearButton = walk(dp6).find(w =>
 clearButton.emit('clicked');
 check('overrides cleared', stored()['DP-6'].overrides, {});
 check('scale survives the clear', stored()['DP-6'].scale, 61);
-check('cleared rows explain the scaled value again',
-    rowsUnder(dp6, 'Panel Height')[0].subtitle, 'Automatic · 43');
-check('rows returned to Auto', heightRow.get_value(), 29);
+check('cleared rows follow the scale again',
+    overrideRow(dp6, 'Panel Height').row.subtitle, 'Following the scale');
+check('cleared rows show the scaled value',
+    overrideRow(dp6, 'Panel Height').spin.get_value(), 43);
 check('subtitle back to the scaled result',
     dp6.subtitle, 'DP-6 · 1080×1920 · Panel 43 px · Icons 26 px');
 
@@ -106,7 +135,8 @@ Sizing.writeMonitorSizing(settings, {
     'DP-6': {enabled: true, scale: 80, overrides: {'icon-size': 30}},
 });
 check('external scale synced', scale.get_value(), 80);
-check('external override synced', rowsUnder(dp6, 'Icon Size')[0].get_value(), 30);
+check('external override synced',
+    overrideRow(dp6, 'Icon Size').spin.get_value(), 30);
 check('external subtitle synced',
     dp6.subtitle, 'DP-6 · 1080×1920 · Panel 50 px · Icons 30 px');
 
@@ -122,5 +152,21 @@ check('global change refreshes the scaled monitor',
     expanderFor('DP-9').subtitle, 'DP-9 · 2560×1440 · Panel 60 px · Icons 43 px');
 settings.set_int('panel-height', 62);
 
-settings.set_string('per-monitor-sizing', ORIGINAL);
+// --- regression: at a high scale the resolved values sit at the schema
+// maxima. Rows must still show those, not the bottom of the range.
+Sizing.writeMonitorSizing(settings, {
+    'DP-6': {enabled: true, scale: 150, overrides: {}},
+});
+const high = Sizing.resolveSizing(settings, 'DP-6');
+check('a high scale clamps at the schema maxima',
+    [high['panel-height'], high['icon-size']], [80, 48]);
+check('height row shows the clamped value',
+    overrideRow(dp6, 'Panel Height').spin.get_value(), 80);
+check('icon row shows the clamped value',
+    overrideRow(dp6, 'Icon Size').spin.get_value(), 48);
+const iconSpin = overrideRow(dp6, 'Icon Size').spin;
+iconSpin.set_value(iconSpin.get_value() - 1);
+check('stepping down from a clamped value moves by one',
+    Sizing.resolveSizing(settings, 'DP-6')['icon-size'], 47);
+
 print(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
