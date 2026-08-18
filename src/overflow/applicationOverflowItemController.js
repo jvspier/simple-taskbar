@@ -25,7 +25,7 @@ export class ApplicationOverflowItemController {
     }
 
     createTaskbarItem(item) {
-        const panelHeight = this._settings.get_int('panel-height');
+        const panelHeight = this._taskbarController.panelHeight;
         const [, width] = item.get_preferred_width(panelHeight);
         const clone = new Clutter.Clone({source: item});
         const button = new St.Button({
@@ -50,7 +50,7 @@ export class ApplicationOverflowItemController {
         const window = item._taskbarWindow;
         const icon = app.create_icon_texture(Math.min(
             32,
-            this._settings.get_int('icon-size')
+            this._taskbarController.iconSize
         ));
         const label = new St.Label({
             text: window
@@ -125,7 +125,7 @@ export class ApplicationOverflowItemController {
     }
 
     _createShowDesktopListItem(item) {
-        const panelHeight = this._settings.get_int('panel-height');
+        const panelHeight = this._taskbarController.panelHeight;
         const clone = new Clutter.Clone({source: item});
         const label = new St.Label({
             text: _('Show desktop'),
@@ -234,14 +234,14 @@ export class ApplicationOverflowItemController {
             _taskbarDropAccepted: false,
             _taskbarDropTarget: null,
             getDragActor: () => sourceItem._taskbarApp.create_icon_texture(
-                this._settings.get_int('icon-size')
+                this._taskbarController.iconSize
             ),
             getDragActorSource: () => sourceItem._taskbarIcon,
         };
         auxiliaryItem._delegate = dragSource;
         const draggable = DND.makeDraggable(auxiliaryItem, {
             timeoutThreshold: 200,
-            dragActorMaxSize: this._settings.get_int('icon-size'),
+            dragActorMaxSize: this._taskbarController.iconSize,
         });
         auxiliaryItem._taskbarDraggable = draggable;
         this._draggables.set(auxiliaryItem, {

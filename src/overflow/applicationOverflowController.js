@@ -433,7 +433,7 @@ export class ApplicationOverflowController {
         }
 
         this._viewport.hadjustment.set_value(0);
-        const panelHeight = this._settings.get_int('panel-height');
+        const panelHeight = this._taskbarController.panelHeight;
         const items = this._taskbarController.getOrderedItems();
         const itemWidths = items.map(item =>
             item.get_preferred_width(panelHeight)[1]
@@ -493,7 +493,7 @@ export class ApplicationOverflowController {
         const style = this._settings.get_string(
             'application-overflow-style'
         );
-        const panelHeight = this._settings.get_int('panel-height');
+        const panelHeight = this._taskbarController.panelHeight;
         const layoutSignature = items.map(item =>
             item.get_preferred_width(panelHeight)[1]
         ).join(':') + `:${panelHeight}`;
@@ -541,7 +541,7 @@ export class ApplicationOverflowController {
             const adjustment = scrollView.hadjustment;
             const increment = Math.max(
                 adjustment.step_increment,
-                this._settings.get_int('panel-height')
+                this._taskbarController.panelHeight
             );
             const delta = getScrollDelta(event, increment);
             adjustment.set_value(adjustment.get_value() + delta);
@@ -593,7 +593,7 @@ export class ApplicationOverflowController {
                 1,
                 workArea.width - POPUP_MARGIN
             );
-            const panelHeight = this._settings.get_int('panel-height');
+            const panelHeight = this._taskbarController.panelHeight;
             const contentWidth = this._overflowItems.reduce(
                 (width, item) => width +
                     item.get_preferred_width(panelHeight)[1],

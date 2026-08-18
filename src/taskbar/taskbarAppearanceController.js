@@ -26,6 +26,7 @@ export class TaskbarAppearanceController {
         getAppLabelWidth,
         getIconSize,
         getPanelHeight,
+        getIconSpacing,
         showAppLabels,
     }) {
         this._settings = settings;
@@ -34,6 +35,7 @@ export class TaskbarAppearanceController {
         this._getAppLabelWidth = getAppLabelWidth;
         this._getIconSize = getIconSize;
         this._getPanelHeight = getPanelHeight;
+        this._getIconSpacing = getIconSpacing;
         this._showAppLabels = showAppLabels;
         this._iconColors = new IconDominantColorCache();
     }
@@ -288,7 +290,7 @@ export class TaskbarAppearanceController {
     }
 
     iconSpacing(isLauncher) {
-        const spacing = this._settings.get_int('icon-spacing');
+        const spacing = this._getIconSpacing();
         if (this._settings.get_boolean('windows-xp-theme-enabled') &&
             isLauncher) {
             return spacing;

@@ -35,6 +35,8 @@ import {StartMenuTooltipController} from './startMenuTooltipController.js';
 import {SourcePressGuard} from './sourcePressGuard.js';
 import {shellMenusUseLightTheme} from '../themeUtils.js';
 import {panelTransparencyOpacity} from '../transparencyUtils.js';
+import {connectorForMonitor} from '../shared/monitorConnectors.js';
+import {resolveSizing} from '../shared/monitorSizing.js';
 import {
     blurMyShellHasKey,
     getBlurMyShellChildSettings,
@@ -501,7 +503,12 @@ export class StartMenuController {
             : this._sourceActor;
 
         if (useDummySource) {
-            const panelHeight = this._settings.get_int('panel-height');
+            // The panel this menu opens from may be sized differently from
+            // the primary monitor's.
+            const panelHeight = resolveSizing(
+                this._settings,
+                connectorForMonitor(monitor)
+            )['panel-height'];
             let sourceX = monitor.x + monitor.width / 2;
             let sourceWidth = 1;
             if (!centerOnMonitor) {

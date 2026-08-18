@@ -21,6 +21,7 @@ import {
     addComboRow,
     addSpinRow,
 } from './preferencesWidgets.js';
+import {addPerMonitorSizingGroup} from './perMonitorSizingGroup.js';
 
 export function addPanelAppearancePage({
     page,
@@ -480,6 +481,8 @@ export function addPanelAppearancePage({
         syncPanelBorderControls
     );
     syncPanelBorderControls();
+
+    addPerMonitorSizingGroup({page, settings, connectSettings});
 
     return {
         syncCustomColor: updateCustomPanelColorControls,

@@ -19,6 +19,7 @@ export class TaskbarShowDesktopController {
         dragIsEnabled,
         finishDrag,
         getPanelHeight,
+        getIconSpacing,
         getPreserveItemWidths,
         notifyModeChanged,
         queueRedisplay,
@@ -27,6 +28,7 @@ export class TaskbarShowDesktopController {
     }) {
         this._settings = settings;
         this._taskbarActor = taskbarActor;
+        this._getIconSpacing = getIconSpacing;
         this._cancelDrag = cancelDrag;
         this._dragIsEnabled = dragIsEnabled;
         this._finishDrag = finishDrag;
@@ -142,7 +144,7 @@ export class TaskbarShowDesktopController {
             return;
 
         const panelHeight = this._getPanelHeight();
-        const spacing = this._settings.get_int('icon-spacing');
+        const spacing = this._getIconSpacing();
         const slotWidth = WINDOWS_XP_SHOW_DESKTOP_WIDTH + spacing +
             (runningGap ? WINDOWS_XP_PINNED_TO_RUNNING_GAP : 0) +
             (trailing && spacing < 0 ? -spacing : 0);

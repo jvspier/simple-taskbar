@@ -31,6 +31,7 @@ export class StartButtonController {
         extensionDir,
         settings,
         iconSize,
+        getStartButtonPadding = null,
         previewController,
         openPreferences,
         closeApp,
@@ -42,6 +43,10 @@ export class StartButtonController {
     }) {
         this._extensionDir = extensionDir;
         this._settings = settings;
+        // The panel owning this button resolves its own padding; without a
+        // resolver the global setting applies.
+        this._getStartButtonPadding = getStartButtonPadding ??
+            (() => settings.get_int('start-button-padding'));
         this._previews = previewController;
         this._openPreferences = openPreferences;
         this._closeApp = closeApp;
@@ -121,7 +126,7 @@ export class StartButtonController {
                 switcherKeybindings
             )
             : null;
-        this.applyAppearance(iconSize, settings.get_int('start-button-padding'));
+        this.applyAppearance(iconSize, this._getStartButtonPadding());
     }
 
     enable() {
@@ -349,7 +354,7 @@ export class StartButtonController {
             this._syncWindowsXpStartButton();
             this.applyAppearance(
                 this._icon.icon_size,
-                this._settings.get_int('start-button-padding')
+                this._getStartButtonPadding()
             );
             this._syncVisibility();
             this._syncState();
@@ -357,7 +362,7 @@ export class StartButtonController {
         }, this._signalHolder);
         const syncPosition = () => this.applyAppearance(
             this._icon.icon_size,
-            this._settings.get_int('start-button-padding')
+            this._getStartButtonPadding()
         );
         this._settings.connectObject(
             'changed::start-button-position', syncPosition,

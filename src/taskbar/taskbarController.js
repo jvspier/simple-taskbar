@@ -51,6 +51,7 @@ export class TaskbarController {
         favorites,
         iconSize,
         panelHeight,
+        iconSpacing,
         getInterestingWindows,
         onAppClicked,
         onWindowClicked,
@@ -65,6 +66,8 @@ export class TaskbarController {
         this._favorites = favorites;
         this._iconSize = iconSize;
         this._panelHeight = panelHeight;
+        this._iconSpacingValue =
+            iconSpacing ?? settings.get_int('icon-spacing');
         this._getInterestingWindows = getInterestingWindows;
         this._onAppClicked = onAppClicked;
         this._onWindowClicked = onWindowClicked;
@@ -116,6 +119,7 @@ export class TaskbarController {
             getAppLabelWidth: () => this._appLabelWidth,
             getIconSize: () => this._iconSize,
             getPanelHeight: () => this._panelHeight,
+            getIconSpacing: () => this._iconSpacingValue,
             showAppLabels: () => this._showAppLabels(),
         });
         this._dragController = new TaskbarDragController({
@@ -142,6 +146,7 @@ export class TaskbarController {
             dragIsEnabled: item => this._dragIsEnabled(item),
             finishDrag: item => this._dragController.finish(item),
             getPanelHeight: () => this._panelHeight,
+            getIconSpacing: () => this._iconSpacingValue,
             getPreserveItemWidths: () => this._preserveItemWidths,
             notifyModeChanged: () => this._onShowDesktopModeChanged(),
             queueRedisplay: () => this._queueRedisplay(),
@@ -287,6 +292,21 @@ export class TaskbarController {
         return this.getItems().some(item =>
             item._taskbarButton._taskbarMenu?.isOpen
         );
+    }
+
+    // Sizing resolved for the panel this taskbar belongs to. Consumers must
+    // read these rather than the global settings, which are only the
+    // starting point for per-monitor sizing.
+    get iconSize() {
+        return this._iconSize;
+    }
+
+    get panelHeight() {
+        return this._panelHeight;
+    }
+
+    get iconSpacing() {
+        return this._iconSpacingValue;
     }
 
     get isDragging() {
@@ -526,6 +546,14 @@ export class TaskbarController {
             this._updateGlassGeometry(item);
         }
         this.queueIconGeometryUpdate();
+    }
+
+    setIconSpacing(iconSpacing) {
+        if (this._iconSpacingValue === iconSpacing)
+            return;
+
+        this._iconSpacingValue = iconSpacing;
+        this.applyAppearance();
     }
 
     setStartMenuOpen(open) {

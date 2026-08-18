@@ -43,6 +43,11 @@ import {createTaskbarViewport} from '../taskbar/taskbarViewportFactory.js';
 import {VolumeMixerController} from '../integration/volumeMixerController.js';
 import {WindowController} from '../taskbar/windowController.js';
 import {WindowPreviewController} from '../taskbar/windowPreviewController.js';
+import {
+    resolveSizing,
+    SIZING_SETTING_KEY,
+    sizingEquals,
+} from '../shared/monitorSizing.js';
 
 const EXTERNAL_PANEL_STYLES = new Set(BLUR_MY_SHELL_PANEL_STYLES);
 const OWN_BLUR_CLASSES = new Set(PANEL_BLUR_CLASSES);
@@ -56,15 +61,18 @@ export class SecondaryPanelController {
         favorites,
         spreadAppWindows,
         monitor,
+        connector = null,
         openPreferences,
     }) {
         this._settings = settings;
         this._extensionDir = extensionDir;
         this._monitor = monitor;
+        this._connector = connector;
         this._openPreferencesCallback = openPreferences;
         this._signalHolder = new TransientSignalHolder();
-        this._panelHeight = settings.get_int('panel-height');
-        this._iconSize = settings.get_int('icon-size');
+        this._sizing = resolveSizing(settings, connector);
+        this._panelHeight = this._sizing['panel-height'];
+        this._iconSize = this._sizing['icon-size'];
 
         this._windowController = new WindowController(tracker, {
             settings,
@@ -80,6 +88,7 @@ export class SecondaryPanelController {
             favorites,
             iconSize: this._iconSize,
             panelHeight: this._panelHeight,
+            iconSpacing: this._sizing['icon-spacing'],
             getInterestingWindows: app =>
                 this._windowController.getInterestingWindows(app),
             onAppClicked: (item, app) =>
@@ -99,6 +108,7 @@ export class SecondaryPanelController {
             extensionDir,
             settings,
             iconSize: this._iconSize,
+            getStartButtonPadding: () => this._sizing['start-button-padding'],
             previewController: this._windowPreviews,
             openPreferences,
             closeApp: (app, timestamp) =>
@@ -133,7 +143,8 @@ export class SecondaryPanelController {
         this._buttonPaddingController = new PanelButtonPaddingController(
             settings,
             this.actor,
-            [this._leftBox, this._centerBox, this._rightBox]
+            [this._leftBox, this._centerBox, this._rightBox],
+            () => this._sizing
         );
         this._taskbarController.setAlignmentActor(this._centerBox);
         this._interactionController = null;
@@ -293,21 +304,16 @@ export class SecondaryPanelController {
                 this._updateTaskbarWidth();
             }, this._signalHolder);
         }
-        this._settings.connectObject('changed::icon-size', () => {
-            this._iconSize = this._settings.get_int('icon-size');
-            this._startButtonController.applyAppearance(
-                this._iconSize,
-                this._settings.get_int('start-button-padding')
-            );
-            this._taskbarController.setIconSize(this._iconSize);
-            this._updateTaskbarWidth();
-        }, this._signalHolder);
-        this._settings.connectObject('changed::panel-height', () => {
-            this._panelHeight = this._settings.get_int('panel-height');
-            this._taskbarController.setPanelHeight(this._panelHeight);
-            this._position();
-        }, this._signalHolder);
+        this._settings.connectObject(
+            'changed::icon-size', () => this._refreshSizing(),
+            'changed::panel-height', () => this._refreshSizing(),
+            'changed::start-button-padding', () => this._refreshSizing(),
+            'changed::windows-xp-theme-enabled', () => this._refreshSizing(),
+            `changed::${SIZING_SETTING_KEY}`, () => this._refreshSizing(),
+            this._signalHolder
+        );
         this._settings.connectObject('changed::icon-spacing', () => {
+            this._refreshSizing();
             this._applyAppearance();
             this._updateTaskbarWidth();
         }, this._signalHolder);
@@ -364,13 +370,7 @@ export class SecondaryPanelController {
         this._settings.connectObject('changed::panel-item-order', () => {
             this._applyLayout();
         }, this._signalHolder);
-        this._settings.connectObject('changed::start-button-padding', () => {
-            this._startButtonController.applyAppearance(
-                this._iconSize,
-                this._settings.get_int('start-button-padding')
-            );
-            this._updateTaskbarWidth();
-        }, this._signalHolder);
+
         for (const signal of ['child-added', 'child-removed']) {
             this._taskbarController.actor.connectObject(signal, () => {
                 this._updateTaskbarWidth();
@@ -381,10 +381,27 @@ export class SecondaryPanelController {
         }, this._signalHolder);
     }
 
+    // Re-resolve this monitor's sizing and push it through the panel.
+    _refreshSizing() {
+        const sizing = resolveSizing(this._settings, this._connector);
+        if (sizingEquals(this._sizing, sizing))
+            return;
+
+        this._sizing = sizing;
+        this._iconSize = sizing['icon-size'];
+        this._panelHeight = sizing['panel-height'];
+        this._taskbarController.setIconSize(this._iconSize);
+        this._taskbarController.setPanelHeight(this._panelHeight);
+        this._taskbarController.setIconSpacing(sizing['icon-spacing']);
+        this._buttonPaddingController.syncSizing();
+        this._applyAppearance();
+        this._position();
+    }
+
     _applyAppearance() {
         this._startButtonController.applyAppearance(
             this._iconSize,
-            this._settings.get_int('start-button-padding')
+            this._sizing['start-button-padding']
         );
         this._taskbarController.applyAppearance();
     }

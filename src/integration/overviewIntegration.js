@@ -19,6 +19,8 @@ import {
 
 import {extensionWillBeActive} from '../extensionState.js';
 import {panelIsTop} from '../panel/panelPosition.js';
+import {connectorForMonitorIndex} from '../shared/monitorConnectors.js';
+import {resolveSizing, SIZING_SETTING_KEY} from '../shared/monitorSizing.js';
 
 const OVERVIEW_LABEL_MARGIN = 60;
 const STARTUP_OVERVIEW_DELAY = 600;
@@ -30,6 +32,7 @@ const DESKTOP_DOCK_UUIDS = [
 export class OverviewIntegration {
     constructor(panelHeight, settings) {
         this._panelHeight = panelHeight;
+        this._monitorHeights = new Map();
         this._settings = settings;
         this._dashState = null;
         this._dashVisibilityRepairId = 0;
@@ -55,6 +58,16 @@ export class OverviewIntegration {
                 this._syncDashVisibility();
             },
             'changed::panel-autohide-enabled', () => this.queueRelayout(),
+            // Secondary monitors may reserve a different amount of space.
+            `changed::${SIZING_SETTING_KEY}`, () => this._invalidateHeights(),
+            'changed::panel-height', () => this._invalidateHeights(),
+            'changed::icon-size', () => this._invalidateHeights(),
+            'changed::windows-xp-theme-enabled',
+            () => this._invalidateHeights(),
+            this._signalHolder
+        );
+        Main.layoutManager.connectObject(
+            'monitors-changed', () => this._invalidateHeights(),
             this._signalHolder
         );
         Main.overview.connectObject(
@@ -96,6 +109,29 @@ export class OverviewIntegration {
         this._syncDashVisibility();
         this._watchDashVisibility();
         this._adaptAllocation();
+    }
+
+    _invalidateHeights() {
+        this._monitorHeights.clear();
+        this.queueRelayout();
+    }
+
+    // Panel height reserved on a given monitor, which may differ from the
+    // primary monitor's when per-monitor sizing is configured.
+    _panelHeightForMonitorIndex(index) {
+        if (!Number.isInteger(index))
+            return this._panelHeight;
+
+        const cached = this._monitorHeights.get(index);
+        if (cached !== undefined)
+            return cached;
+
+        const connector = connectorForMonitorIndex(index);
+        const height = connector
+            ? resolveSizing(this._settings, connector)['panel-height']
+            : this._panelHeight;
+        this._monitorHeights.set(index, height);
+        return height;
     }
 
     setPanelHeight(panelHeight) {
@@ -374,7 +410,10 @@ export class OverviewIntegration {
                         0,
                         1
                     );
-                    const inset = integration._panelHeight * progress;
+                    // SecondaryMonitorDisplay tracks its monitor by index.
+                    const inset = integration._panelHeightForMonitorIndex(
+                        this._monitorIndex ?? this._monitor?.index
+                    ) * progress;
                     if (panelIsTop(integration._settings))
                         box.y1 += inset;
                     else

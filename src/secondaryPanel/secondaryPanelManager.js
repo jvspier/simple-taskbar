@@ -14,6 +14,7 @@ import {
     refreshPanelBlurVisibility,
 } from '../integration/blurMyShellRuntime.js';
 import {SecondaryPanelController} from './secondaryPanelController.js';
+import {connectorForMonitor} from '../shared/monitorConnectors.js';
 
 export class SecondaryPanelManager {
     constructor({
@@ -139,6 +140,7 @@ export class SecondaryPanelManager {
                 favorites: this._favorites,
                 spreadAppWindows: this._spreadAppWindows,
                 monitor,
+                connector: connectorForMonitor(monitor),
                 openPreferences: this._openPreferences,
             });
             this._panels.push(panel);

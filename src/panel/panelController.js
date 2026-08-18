@@ -36,6 +36,7 @@ export class PanelController {
     constructor({
         settings,
         panelHeight,
+        sizing = null,
         startButton,
         taskbarBin,
         taskbarActor,
@@ -48,6 +49,7 @@ export class PanelController {
     }) {
         this._settings = settings;
         this._panelHeight = panelHeight;
+        this._sizing = sizing;
         this._startButton = startButton;
         this._taskbarBin = taskbarBin;
         this._taskbarActor = taskbarActor;
@@ -84,7 +86,8 @@ export class PanelController {
                 Main.panel._leftBox,
                 Main.panel._centerBox,
                 Main.panel._rightBox,
-            ]
+            ],
+            () => this._sizing
         );
     }
 
@@ -125,6 +128,14 @@ export class PanelController {
 
     setPanelHeight(panelHeight) {
         this._panelHeight = panelHeight;
+        this.position();
+    }
+
+    // Apply the sizing resolved for the primary monitor.
+    setSizing(sizing) {
+        this._sizing = sizing;
+        this._panelHeight = sizing['panel-height'];
+        this._buttonPaddingController.syncSizing();
         this.position();
     }
 

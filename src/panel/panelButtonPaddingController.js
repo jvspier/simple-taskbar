@@ -24,8 +24,9 @@ const MINIMUM_HOVER_INSET = 3;
 const REGULAR_HOVER_INSET = 6;
 
 export class PanelButtonPaddingController {
-    constructor(settings, panelActor, panelBoxes) {
+    constructor(settings, panelActor, panelBoxes, getSizing = null) {
         this._settings = settings;
+        this._getSizing = getSizing;
         this._panelActor = panelActor;
         this._panelBoxes = panelBoxes;
         this._signalHolder = new TransientSignalHolder();
@@ -60,7 +61,7 @@ export class PanelButtonPaddingController {
 
     sync() {
         const automatic =
-            this._settings.get_int('panel-button-padding') ===
+            this._sizingValue('panel-button-padding') ===
             AUTOMATIC_PADDING;
         const padding = this._effectivePadding();
         this._panelActor.remove_style_class_name(
@@ -99,6 +100,22 @@ export class PanelButtonPaddingController {
         this._settings = null;
     }
 
+    // Re-read the sizing this panel resolved for its own monitor.
+    syncSizing() {
+        if (!this._panelActor)
+            return;
+
+        this._syncHoverInset();
+        this.sync();
+    }
+
+    // Prefers the per-monitor resolved value, falling back to the global
+    // setting when this panel has no sizing resolver attached.
+    _sizingValue(key) {
+        const value = this._getSizing?.()?.[key];
+        return Number.isFinite(value) ? value : this._settings.get_int(key);
+    }
+
     _externalPaddingIsActive() {
         const styleClasses =
             Main.layoutManager.uiGroup.get_style_class_name() ?? '';
@@ -114,7 +131,7 @@ export class PanelButtonPaddingController {
             );
         }
 
-        const panelHeight = this._settings.get_int('panel-height');
+        const panelHeight = this._sizingValue('panel-height');
         const heightRange = REGULAR_PANEL_HEIGHT - MIN_PANEL_HEIGHT;
         const clampedHeight = Math.clamp(
             panelHeight,
@@ -132,7 +149,7 @@ export class PanelButtonPaddingController {
     }
 
     _effectivePadding() {
-        const configured = this._settings.get_int('panel-button-padding');
+        const configured = this._sizingValue('panel-button-padding');
         if (configured !== AUTOMATIC_PADDING)
             return configured;
         if (this._externalPaddingIsActive())
