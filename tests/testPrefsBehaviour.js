@@ -163,15 +163,18 @@ Sizing.writeMonitorSizing(settings, {
     'DP-6': {enabled: true, scale: 150, overrides: {}},
 });
 const high = Sizing.resolveSizing(settings, 'DP-6');
-check('a high scale clamps at the schema maxima',
-    [high['panel-height'], high['icon-size']], [80, 48]);
-check('height row shows the clamped value',
-    overrideRow(dp6, 'Panel Height').spin.get_value(), 80);
-check('icon row shows the clamped value',
-    overrideRow(dp6, 'Icon Size').spin.get_value(), 48);
-const iconSpin = overrideRow(dp6, 'Icon Size').spin;
-iconSpin.set_value(iconSpin.get_value() - 1);
-check('stepping down from a clamped value moves by one',
-    Sizing.resolveSizing(settings, 'DP-6')['icon-size'], 47);
+check('a high scale is applied rather than truncated',
+    [high['panel-height'], high['icon-size']], [93, 65]);
+check('height row shows the scaled value',
+    overrideRow(dp6, 'Panel Height').spin.get_value(), 93);
+check('icon row shows the scaled value',
+    overrideRow(dp6, 'Icon Size').spin.get_value(), 65);
+check('a large icon warns about upscaled artwork',
+    overrideRow(dp6, 'Icon Size').row.subtitle,
+    'Following the scale · may look soft above 48 px');
+const iconRow = overrideRow(dp6, 'Icon Size');
+iconRow.spin.set_value(iconRow.spin.get_value() - 1);
+check('stepping down from a large value moves by one',
+    Sizing.resolveSizing(settings, 'DP-6')['icon-size'], 64);
 
 print(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);

@@ -7,6 +7,7 @@ import Gtk from 'gi://Gtk';
 
 import {gettext as _} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
+import {RASTER_ICON_LIMIT} from '../shared/panelSizing.js';
 import {
     getMonitorEntry,
     globalSizing,
@@ -102,9 +103,13 @@ export function addPerMonitorSizingGroup({page, settings, connectSettings}) {
         // large scale can quietly stop having any effect. Say so.
         const scaleSubtitle = current => {
             const base = globalSizing(settings);
-            const capped = SIZING_KEYS.some(({key, lower, upper, automatic}) => {
-                if (base[key] === automatic ||
-                    Number.isFinite(current.overrides[key]))
+            // Only the two values that define how big the taskbar looks
+            // are worth reporting; the paddings have small ranges of their
+            // own and reaching them says nothing useful.
+            const capped = SIZING_KEYS.some(({key, lower, upper}) => {
+                if (key !== 'panel-height' && key !== 'icon-size')
+                    return false;
+                if (Number.isFinite(current.overrides[key]))
                     return false;
 
                 const scaled = Math.round(base[key] * current.scale / 100);
@@ -177,9 +182,15 @@ export function addPerMonitorSizingGroup({page, settings, connectSettings}) {
                 if (Math.round(row.get_value()) !== value)
                     row.set_value(value);
                 reset.visible = overridden;
-                row.subtitle = overridden
+                const state = overridden
                     ? _('Overriding the scale')
                     : _('Following the scale');
+                // A monitor can be scaled past the raster icon ladder even
+                // when the global size is below it, so warn per monitor too.
+                row.subtitle = key === 'icon-size' &&
+                    resolved[key] > RASTER_ICON_LIMIT
+                    ? `${state} · ${_('may look soft above')} ${RASTER_ICON_LIMIT} px`
+                    : state;
             }
         };
 

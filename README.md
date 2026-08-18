@@ -83,8 +83,11 @@ Overview, including windows on other workspaces.
 
 ### Panel Appearance
 
-- Standard panel height: 32–80px.
-- Application icons: 15–48px.
+- Standard panel height: 30–256px.
+- Application icons: 15–256px. Beyond 48px an application that ships only
+  traditional raster artwork may be upscaled and look soft, while scalable
+  icons stay sharp; which applications this affects depends on the icon
+  theme, so the size is left to choose with a note rather than capped.
 - Application spacing: 0–16px.
 - Panel button padding: automatic or an explicit 0–20px value. Automatic uses
   Just Perfection's padding when available, otherwise 3px. An explicit value
@@ -101,7 +104,8 @@ Overview, including windows on other workspaces.
   above, with optional explicit overrides for individual values. Monitors
   are keyed by connector name, so their settings survive replugging and
   reordering, and a monitor is left on the shared values until it is
-  switched on. Windows XP Theme already sits close to the smallest allowed
+  switched on. Each override row shows the value currently in effect and
+  can be handed back to the scale individually. Windows XP Theme already sits close to the smallest allowed
   sizes, so there is little room to scale it down.
 
 <p align="center">

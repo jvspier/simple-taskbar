@@ -3,7 +3,7 @@
   <schema id="org.gnome.shell.extensions.simple-taskbar"
           path="/org/gnome/shell/extensions/simple-taskbar/">
     <key name="panel-height" type="i">
-      <range min="30" max="80"/>
+      <range min="30" max="256"/>
       <default>49</default>
       <summary>Taskbar height</summary>
     </key>
@@ -40,7 +40,7 @@
       <summary>Show a ripple when the bottom hot edge activates</summary>
     </key>
     <key name="icon-size" type="i">
-      <range min="15" max="48"/>
+      <range min="15" max="256"/>
       <default>32</default>
       <summary>Application icon size</summary>
     </key>

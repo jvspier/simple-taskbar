@@ -8,6 +8,7 @@ import {gettext as _} from 'resource:///org/gnome/Shell/Extensions/js/extensions
 
 import {
     ICON_VERTICAL_RESERVE,
+    MAX_PANEL_HEIGHT,
     MIN_PANEL_HEIGHT,
     STANDARD_MIN_PANEL_HEIGHT,
 } from '../shared/panelSizing.js';
@@ -57,7 +58,7 @@ export function addPanelAppearancePage({
                 'Oversized icons shrink automatically when the panel is reduced'
             ),
             lower: MIN_PANEL_HEIGHT,
-            upper: 80,
+            upper: MAX_PANEL_HEIGHT,
         },
         connectSettings
     );

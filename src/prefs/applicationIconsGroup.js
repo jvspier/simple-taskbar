@@ -11,8 +11,20 @@ import {
     addComboRow,
     addSpinRow,
 } from './preferencesWidgets.js';
+import {
+    MAX_ICON_SIZE,
+    RASTER_ICON_LIMIT,
+} from '../shared/panelSizing.js';
 
-const MAX_ICON_SIZE = 48;
+// Shown once icons are large enough that traditional raster artwork has to
+// be upscaled. Which applications this affects depends on the icon theme,
+// so the warning states the trade-off rather than blocking the choice.
+export function iconSizeSubtitle(iconSize) {
+    return iconSize > RASTER_ICON_LIMIT
+        ? _('Above %d px, applications that ship only smaller artwork may look soft. Scalable icons are unaffected')
+            .replace('%d', RASTER_ICON_LIMIT)
+        : _('The panel grows automatically when larger icons need more room');
+}
 
 export function addApplicationIconsGroup({
     page,
@@ -33,14 +45,16 @@ export function addApplicationIconsGroup({
         {
             key: 'icon-size',
             title: _('Icon Size'),
-            subtitle: _(
-                'The panel grows automatically when larger icons need more room'
-            ),
+            subtitle: iconSizeSubtitle(settings.get_int('icon-size')),
             lower: 15,
             upper: MAX_ICON_SIZE,
         },
         connectSettings
     );
+    const syncIconSizeSubtitle = () => {
+        iconSizeRow.subtitle = iconSizeSubtitle(settings.get_int('icon-size'));
+    };
+    connectSettings(settings, 'changed::icon-size', syncIconSizeSubtitle);
     const iconSpacingRow = addSpinRow(
         appearanceGroup,
         settings,

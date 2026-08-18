@@ -14,7 +14,11 @@
 // Both the shell and the preferences process import this file, so it must
 // stay free of Meta, St and Gtk imports.
 
-import {ICON_VERTICAL_RESERVE} from './panelSizing.js';
+import {
+    ICON_VERTICAL_RESERVE,
+    MAX_ICON_SIZE,
+    MAX_PANEL_HEIGHT,
+} from './panelSizing.js';
 
 export const SIZING_SETTING_KEY = 'per-monitor-sizing';
 
@@ -26,8 +30,8 @@ export const DEFAULT_SCALE = 100;
 // the schema. `automatic` marks a sentinel that must survive scaling
 // untouched, because it selects a behaviour rather than a pixel size.
 export const SIZING_KEYS = [
-    {key: 'panel-height', lower: 30, upper: 80},
-    {key: 'icon-size', lower: 15, upper: 48},
+    {key: 'panel-height', lower: 30, upper: MAX_PANEL_HEIGHT},
+    {key: 'icon-size', lower: 15, upper: MAX_ICON_SIZE},
     {key: 'icon-spacing', lower: -5, upper: 16},
     {key: 'panel-button-padding', lower: -1, upper: 20, automatic: -1},
     {key: 'start-button-padding', lower: 0, upper: 20},

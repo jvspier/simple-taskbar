@@ -112,11 +112,25 @@ s.set_string('per-monitor-sizing', JSON.stringify({
 }));
 const clamped = resolveSizing(s, 'DP-6');
 check('scale clamps to 150', getMonitorEntry(readMonitorSizing(s), 'DP-6').scale, 150);
-check('icon clamps to 48', clamped['icon-size'], 48);
-// 62 * 1.5 = 93, capped at the schema maximum of 80, which still fits a 48 px icon.
-check('height caps at 80 and still fits the icon', clamped['panel-height'], 80);
-check('capped height keeps the reserve',
+// An absurd icon size clamps to the ceiling, and the panel grows to hold it
+// until it hits its own ceiling, at which point the icon gives way again.
+check('panel grows to its ceiling', clamped['panel-height'], 256);
+check('icon settles at the ceiling minus the reserve',
+    clamped['icon-size'], 239);
+check('the reserve still holds at the ceiling',
     clamped['panel-height'] >= clamped['icon-size'] + 17, true);
+
+// The point of raising the limits: a high scale on a dense display is no
+// longer silently truncated at the old 80/48 ceiling.
+s.set_string('per-monitor-sizing', JSON.stringify({
+    'eDP-1': {enabled: true, scale: 150, overrides: {}},
+}));
+check('a high scale is no longer capped at the old limits',
+    resolveSizing(s, 'eDP-1'), {
+        'panel-height': 93, 'icon-size': 65, 'icon-spacing': 6,
+        // The paddings keep their own modest ranges, so this one still caps.
+        'panel-button-padding': -1, 'start-button-padding': 20,
+    });
 
 s.set_string('per-monitor-sizing', 'not json at all');
 check('malformed json -> empty', readMonitorSizing(s), {});
