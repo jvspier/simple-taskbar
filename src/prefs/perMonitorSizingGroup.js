@@ -8,8 +8,11 @@ import Gtk from 'gi://Gtk';
 import {gettext as _} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
 import {RASTER_ICON_LIMIT} from '../shared/panelSizing.js';
+import {listMonitors} from './monitorList.js';
 import {
+    describeMonitorKey,
     getMonitorEntry,
+    monitorKey,
     globalSizing,
     MAXIMUM_SCALE,
     MINIMUM_SCALE,
@@ -47,27 +50,36 @@ export function addPerMonitorSizingGroup({page, settings, connectSettings}) {
     });
     page.add(group);
 
+    // Only used to notice screens being attached or removed; the list
+    // itself comes from listMonitors(), which also carries the EDID fields.
     const monitors = Gdk.Display.get_default()?.get_monitors() ?? null;
     let rows = [];
     let syncing = false;
 
-    const updateEntry = (connector, mutate) => {
+    // Writing always moves an entry onto the identity key, which quietly
+    // migrates anything stored against a connector by an earlier version.
+    const updateEntry = (monitor, mutate) => {
         const data = readMonitorSizing(settings);
-        const entry = getMonitorEntry(data, connector);
+        const key = monitorKey(monitor);
+        const entry = getMonitorEntry(data, monitor);
+        entry.label = monitor.name;
         mutate(entry);
-        data[connector] = entry;
+        data[key] = entry;
+        if (monitor.connector && monitor.connector !== key)
+            delete data[monitor.connector];
         writeMonitorSizing(settings, data);
     };
 
-    const describeResolved = connector => {
-        const resolved = resolveSizing(settings, connector);
+    const describeResolved = monitor => {
+        const resolved = resolveSizing(settings, monitor);
         const height = `${_('Panel')} ${resolved['panel-height']} px`;
         const icons = `${_('Icons')} ${resolved['icon-size']} px`;
         return `${height} · ${icons}`;
     };
 
-    const buildMonitorRow = ({connector, name, resolution}) => {
-        const entry = getMonitorEntry(readMonitorSizing(settings), connector);
+    const buildMonitorRow = monitor => {
+        const {connector, name, resolution} = monitor;
+        const entry = getMonitorEntry(readMonitorSizing(settings), monitor);
         const expander = new Adw.ExpanderRow({
             title: name,
             show_enable_switch: true,
@@ -77,7 +89,7 @@ export function addPerMonitorSizingGroup({page, settings, connectSettings}) {
             expander.subtitle = [
                 connector,
                 resolution,
-                describeResolved(connector),
+                describeResolved(monitor),
             ].join(' · ');
         };
         syncSubtitle();
@@ -85,7 +97,7 @@ export function addPerMonitorSizingGroup({page, settings, connectSettings}) {
             if (syncing)
                 return;
 
-            updateEntry(connector, current => {
+            updateEntry(monitor, current => {
                 current.enabled = expander.enable_expansion;
             });
         });
@@ -124,7 +136,7 @@ export function addPerMonitorSizingGroup({page, settings, connectSettings}) {
             if (syncing)
                 return;
 
-            updateEntry(connector, current => {
+            updateEntry(monitor, current => {
                 current.scale = Math.round(row.get_value());
             });
         });
@@ -153,7 +165,7 @@ export function addPerMonitorSizingGroup({page, settings, connectSettings}) {
                 css_classes: ['flat'],
             });
             reset.connect('clicked', () => {
-                updateEntry(connector, current => {
+                updateEntry(monitor, current => {
                     delete current.overrides[key];
                 });
             });
@@ -162,7 +174,7 @@ export function addPerMonitorSizingGroup({page, settings, connectSettings}) {
                     return;
 
                 const value = Math.round(widget.get_value());
-                updateEntry(connector, current => {
+                updateEntry(monitor, current => {
                     current.overrides[key] = value;
                 });
             });
@@ -173,7 +185,7 @@ export function addPerMonitorSizingGroup({page, settings, connectSettings}) {
 
         // Must be called with `syncing` held, since it writes to the spins.
         const syncOverrideRows = entry => {
-            const resolved = resolveSizing(settings, connector);
+            const resolved = resolveSizing(settings, monitor);
             scaleSubtitle(entry);
             for (const {key, row, reset} of overrideRows) {
                 const override = entry.overrides[key];
@@ -203,7 +215,7 @@ export function addPerMonitorSizingGroup({page, settings, connectSettings}) {
             valign: Gtk.Align.CENTER,
         });
         clearButton.connect('clicked', () => {
-            updateEntry(connector, current => {
+            updateEntry(monitor, current => {
                 current.overrides = {};
             });
         });
@@ -214,7 +226,7 @@ export function addPerMonitorSizingGroup({page, settings, connectSettings}) {
         const sync = () => {
             const current = getMonitorEntry(
                 readMonitorSizing(settings),
-                connector
+                monitor
             );
             syncing = true;
             try {
@@ -239,9 +251,10 @@ export function addPerMonitorSizingGroup({page, settings, connectSettings}) {
 
     // Monitors that are no longer attached keep their settings, but are
     // only shown so they can be forgotten.
-    const buildStaleRow = connector => {
+    const buildStaleRow = key => {
+        const stored = readMonitorSizing(settings)[key];
         const row = new Adw.ActionRow({
-            title: connector,
+            title: stored?.label || describeMonitorKey(key),
             subtitle: _('Not connected · settings kept'),
         });
         const forgetButton = new Gtk.Button({
@@ -250,7 +263,7 @@ export function addPerMonitorSizingGroup({page, settings, connectSettings}) {
         });
         forgetButton.connect('clicked', () => {
             const data = readMonitorSizing(settings);
-            delete data[connector];
+            delete data[key];
             writeMonitorSizing(settings, data);
         });
         row.add_suffix(forgetButton);
@@ -258,36 +271,20 @@ export function addPerMonitorSizingGroup({page, settings, connectSettings}) {
         return {row, sync: () => {}};
     };
 
-    const connectedMonitors = () => {
-        const found = [];
-        if (!monitors)
-            return found;
+    const connectedMonitors = () => listMonitors();
 
-        for (let index = 0; index < monitors.get_n_items(); index++) {
-            const monitor = monitors.get_item(index);
-            const connector = monitor?.connector;
-            if (!connector)
-                continue;
-
-            const geometry = monitor.get_geometry();
-            found.push({
-                connector,
-                // `description` names the built-in panel properly, where
-                // `model` is only the raw EDID identifier.
-                name: monitor.description || monitor.model || connector,
-                resolution: `${geometry.width}×${geometry.height}`,
-            });
+    // Stored entries with no screen attached. An entry still keyed by a
+    // connector counts as attached while that connector is present, since
+    // resolution falls back to it.
+    const staleKeys = () => {
+        const live = new Set();
+        for (const monitor of connectedMonitors()) {
+            live.add(monitorKey(monitor));
+            if (monitor.connector)
+                live.add(monitor.connector);
         }
-        return found;
-    };
-
-    // Connectors with stored settings that are not attached right now.
-    const staleConnectors = () => {
-        const connected = new Set(
-            connectedMonitors().map(monitor => monitor.connector)
-        );
         return Object.keys(readMonitorSizing(settings))
-            .filter(connector => !connected.has(connector))
+            .filter(key => !live.has(key))
             .sort();
     };
 
@@ -300,9 +297,9 @@ export function addPerMonitorSizingGroup({page, settings, connectSettings}) {
         for (const monitor of connectedMonitors())
             rows.push(buildMonitorRow(monitor));
 
-        const stale = staleConnectors();
-        for (const connector of stale)
-            rows.push(buildStaleRow(connector));
+        const stale = staleKeys();
+        for (const key of stale)
+            rows.push(buildStaleRow(key));
         knownStale = stale.join(',');
 
         if (rows.length === 0) {
@@ -332,7 +329,7 @@ export function addPerMonitorSizingGroup({page, settings, connectSettings}) {
     // everything else is a value change the existing rows can absorb, so
     // editing one monitor never collapses the row being edited.
     connectSettings(settings, `changed::${SIZING_SETTING_KEY}`, () => {
-        if (staleConnectors().join(',') !== knownStale) {
+        if (staleKeys().join(',') !== knownStale) {
             rebuild();
             return;
         }

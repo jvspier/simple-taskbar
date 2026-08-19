@@ -1,6 +1,6 @@
 import {
     readMonitorSizing, writeMonitorSizing, resolveSizing,
-    getMonitorEntry, sizingEquals, SIZING_KEYS,
+    getMonitorEntry, sizingEquals, SIZING_KEYS, monitorKey, asIdentity,
 } from '../src/shared/monitorSizing.js';
 
 // Minimal GSettings stand-in.
@@ -150,5 +150,44 @@ check('sizingEquals identical', sizingEquals(dp9, resolveSizing(new FakeSettings
     'per-monitor-sizing': JSON.stringify({'DP-9': {enabled: true, scale: 73, overrides: {}}})}), 'DP-9')), true);
 check('sizingEquals differing', sizingEquals(dp9, dp6), false);
 check('sizingEquals null', sizingEquals(null, dp6), false);
+
+// --- monitor identity: settings follow the screen, not the port it is in
+const screen = {
+    vendor: 'DEL', product: 'DELL U2414H', serial: '292K47AK0FKL',
+    connector: 'DP-6',
+};
+check('key is built from the EDID identity',
+    monitorKey(screen), 'DEL|DELL U2414H|292K47AK0FKL');
+check('a screen with no identity falls back to its connector',
+    monitorKey({connector: 'Meta-0'}), 'Meta-0');
+check('an identity is idempotent through asIdentity',
+    asIdentity(asIdentity(screen)).key, monitorKey(screen));
+
+const docked = new FakeSettings({...base, 'per-monitor-sizing': JSON.stringify({
+    [monitorKey(screen)]: {enabled: true, scale: 61, overrides: {}},
+})});
+check('settings apply on the connector they were saved on',
+    resolveSizing(docked, screen)['panel-height'], 43);
+// The same screen at the other desk, where the dock numbers it differently.
+check('settings follow the screen to another connector',
+    resolveSizing(docked, {...screen, connector: 'DP-7'})['panel-height'], 43);
+check('a different screen on that connector is unaffected',
+    resolveSizing(docked, {
+        vendor: 'BNQ', product: 'BenQ', serial: 'X1', connector: 'DP-6',
+    })['panel-height'], 62);
+
+// --- entries written before identity keying still apply
+const legacy = new FakeSettings({...base, 'per-monitor-sizing': JSON.stringify({
+    'DP-6': {enabled: true, scale: 61, overrides: {}},
+})});
+check('a connector-keyed entry is still honoured',
+    resolveSizing(legacy, screen)['panel-height'], 43);
+check('but only on the connector it names',
+    resolveSizing(legacy, {...screen, connector: 'DP-7'})['panel-height'], 62);
+check('an identity entry wins over a legacy one', resolveSizing(
+    new FakeSettings({...base, 'per-monitor-sizing': JSON.stringify({
+        'DP-6': {enabled: true, scale: 61, overrides: {}},
+        [monitorKey(screen)]: {enabled: true, scale: 90, overrides: {}},
+    })}), screen)['panel-height'], 56);
 
 print(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);

@@ -100,13 +100,16 @@ Overview, including windows on other workspaces.
 - Optional translucent and blurred styling through Blur My Shell on the
   primary panel. Secondary panels use Simple Taskbar's own background.
 - Per-monitor sizing for mixed-density setups. Each monitor can scale the
-  panel height, icon size, spacing and paddings by 50-150% of the values
-  above, with optional explicit overrides for individual values. Monitors
-  are keyed by connector name, so their settings survive replugging and
-  reordering, and a monitor is left on the shared values until it is
-  switched on. Each override row shows the value currently in effect and
-  can be handed back to the scale individually. Windows XP Theme already sits close to the smallest allowed
-  sizes, so there is little room to scale it down.
+  values above by 50–150%, with optional explicit overrides for individual
+  values. Every override row shows the size currently in effect and can be
+  handed back to the scale on its own.
+- Monitors are identified by the vendor, model and serial they report, not by
+  the connector they occupy, so a screen keeps its settings when a dock
+  renumbers its port. Settings saved against a connector by an earlier
+  version still apply and move across the first time that monitor is edited.
+- A monitor keeps using the shared values until per-monitor sizing is
+  switched on for it, so nothing changes by default. Windows XP Theme already
+  sits close to the smallest allowed sizes and has little room to scale down.
 
 <p align="center">
   <img src="docs/images/settings-taskbar.png" alt="Taskbar settings showing general, application icon and panel appearance options" width="100%">

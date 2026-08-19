@@ -38,7 +38,7 @@ import {WindowController} from './src/taskbar/windowController.js';
 import {WindowPreviewController} from './src/taskbar/windowPreviewController.js';
 import {OverviewIntegration} from './src/integration/overviewIntegration.js';
 import {ICON_VERTICAL_RESERVE} from './src/shared/panelSizing.js';
-import {primaryConnector} from './src/shared/monitorConnectors.js';
+import {primaryIdentity} from './src/shared/monitorIdentity.js';
 import {
     resolveSizing,
     SIZING_SETTING_KEY,
@@ -84,7 +84,7 @@ export default class SimpleTaskbarExtension extends Extension {
             this._panelHeight = this._iconSize + ICON_VERTICAL_RESERVE;
             this._settings.set_int('panel-height', this._panelHeight);
         }
-        this._sizing = resolveSizing(this._settings, primaryConnector());
+        this._sizing = resolveSizing(this._settings, primaryIdentity());
         this._iconSize = this._sizing['icon-size'];
         this._panelHeight = this._sizing['panel-height'];
         this._overviewIntegration = new OverviewIntegration(
@@ -383,7 +383,7 @@ export default class SimpleTaskbarExtension extends Extension {
         if (!this._settings)
             return;
 
-        const sizing = resolveSizing(this._settings, primaryConnector());
+        const sizing = resolveSizing(this._settings, primaryIdentity());
         if (!force && sizingEquals(this._sizing, sizing))
             return;
 

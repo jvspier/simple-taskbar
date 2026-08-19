@@ -35,7 +35,7 @@ import {StartMenuTooltipController} from './startMenuTooltipController.js';
 import {SourcePressGuard} from './sourcePressGuard.js';
 import {shellMenusUseLightTheme} from '../themeUtils.js';
 import {panelTransparencyOpacity} from '../transparencyUtils.js';
-import {connectorForMonitor} from '../shared/monitorConnectors.js';
+import {identityForMonitor} from '../shared/monitorIdentity.js';
 import {resolveSizing} from '../shared/monitorSizing.js';
 import {
     blurMyShellHasKey,
@@ -507,7 +507,7 @@ export class StartMenuController {
             // the primary monitor's.
             const panelHeight = resolveSizing(
                 this._settings,
-                connectorForMonitor(monitor)
+                identityForMonitor(monitor)
             )['panel-height'];
             let sourceX = monitor.x + monitor.width / 2;
             let sourceWidth = 1;

@@ -61,16 +61,16 @@ export class SecondaryPanelController {
         favorites,
         spreadAppWindows,
         monitor,
-        connector = null,
+        identity = null,
         openPreferences,
     }) {
         this._settings = settings;
         this._extensionDir = extensionDir;
         this._monitor = monitor;
-        this._connector = connector;
+        this._identity = identity;
         this._openPreferencesCallback = openPreferences;
         this._signalHolder = new TransientSignalHolder();
-        this._sizing = resolveSizing(settings, connector);
+        this._sizing = resolveSizing(settings, identity);
         this._panelHeight = this._sizing['panel-height'];
         this._iconSize = this._sizing['icon-size'];
 
@@ -383,7 +383,7 @@ export class SecondaryPanelController {
 
     // Re-resolve this monitor's sizing and push it through the panel.
     _refreshSizing() {
-        const sizing = resolveSizing(this._settings, this._connector);
+        const sizing = resolveSizing(this._settings, this._identity);
         if (sizingEquals(this._sizing, sizing))
             return;
 

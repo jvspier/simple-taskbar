@@ -9,8 +9,12 @@
 // every monitor may carry a scale percentage applied to the global sizes
 // plus optional explicit overrides for individual keys.
 //
-// Overrides live in a single JSON string setting keyed by connector name
-// ("eDP-1", "DP-6", ...) so they survive replugging and monitor reordering.
+// Overrides live in a single JSON string setting keyed by the monitor's own
+// identity (vendor, product and serial from its EDID) rather than by the
+// connector it happens to occupy, because docks hand out connector names
+// dynamically: the same screen can be DP-6 at one desk and DP-7 at another.
+// Entries written by earlier versions are keyed by connector and are still
+// honoured as a fallback.
 // Both the shell and the preferences process import this file, so it must
 // stay free of Meta, St and Gtk imports.
 
@@ -38,6 +42,42 @@ export const SIZING_KEYS = [
 ];
 
 const RANGES = new Map(SIZING_KEYS.map(entry => [entry.key, entry]));
+
+// Stable key for one physical screen. Falls back to the connector when the
+// display reports no usable identity, which is the case for the virtual
+// monitors used in nested test sessions.
+export function monitorKey({vendor, product, serial, connector} = {}) {
+    const parts = [vendor, product, serial]
+        .map(part => (part ?? '').trim());
+    if (parts[0] && parts[1])
+        return parts.join('|');
+
+    return connector || null;
+}
+
+// Accepts either a full identity or a bare connector string, so callers that
+// only know the connector still work.
+export function asIdentity(value) {
+    if (!value)
+        return null;
+
+    if (typeof value === 'string')
+        return {key: value, connector: value};
+
+    // Idempotent: an already-normalised identity carries no EDID fields, so
+    // re-deriving its key would silently fall back to the connector.
+    if (typeof value.key === 'string' && value.key)
+        return value;
+
+    const key = monitorKey(value);
+    return key ? {key, connector: value.connector ?? null} : null;
+}
+
+// Human-readable form of a stored key, for monitors that are not attached.
+export function describeMonitorKey(key) {
+    const parts = String(key).split('|');
+    return parts.length >= 2 ? `${parts[0]} ${parts[1]}` : String(key);
+}
 
 function clampToRange(key, value) {
     const range = RANGES.get(key);
@@ -95,6 +135,8 @@ function normalizeEntry(entry) {
     }
 
     return {
+        ...(typeof entry.label === 'string' && entry.label
+            ? {label: entry.label} : {}),
         enabled: entry.enabled !== false,
         scale: Number.isFinite(entry.scale)
             ? Math.min(
@@ -112,8 +154,22 @@ export function emptyMonitorEntry() {
     return {enabled: false, scale: DEFAULT_SCALE, overrides: {}};
 }
 
-export function getMonitorEntry(data, connector) {
-    return normalizeEntry(data?.[connector]) ?? emptyMonitorEntry();
+export function getMonitorEntry(data, identityOrConnector) {
+    const identity = asIdentity(identityOrConnector);
+    if (!identity)
+        return emptyMonitorEntry();
+
+    const direct = normalizeEntry(data?.[identity.key]);
+    if (direct)
+        return direct;
+
+    // Written before sizing was keyed by monitor identity.
+    if (identity.connector && identity.connector !== identity.key) {
+        const legacy = normalizeEntry(data?.[identity.connector]);
+        if (legacy)
+            return legacy;
+    }
+    return emptyMonitorEntry();
 }
 
 // Sizing as configured in the global preference keys.
@@ -128,15 +184,16 @@ export function globalSizing(settings) {
 //
 // `connector` may be null (monitor identity unknown), in which case the
 // global sizing is used unchanged.
-export function resolveSizing(settings, connector, data = null) {
+export function resolveSizing(settings, identityOrConnector, data = null) {
     const base = globalSizing(settings);
     // Both modes pick their own proportions on purpose, so the icon
     // reserve must not be enforced against them.
     const fixedProportions =
         settings.get_boolean('default-gnome-panel') ||
         settings.get_boolean('windows-xp-theme-enabled');
-    const entry = connector
-        ? getMonitorEntry(data ?? readMonitorSizing(settings), connector)
+    const identity = asIdentity(identityOrConnector);
+    const entry = identity
+        ? getMonitorEntry(data ?? readMonitorSizing(settings), identity)
         : null;
 
     if (!entry || !entry.enabled)

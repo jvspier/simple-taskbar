@@ -19,7 +19,7 @@ import {
 
 import {extensionWillBeActive} from '../extensionState.js';
 import {panelIsTop} from '../panel/panelPosition.js';
-import {connectorForMonitorIndex} from '../shared/monitorConnectors.js';
+import {identityForMonitorIndex} from '../shared/monitorIdentity.js';
 import {resolveSizing, SIZING_SETTING_KEY} from '../shared/monitorSizing.js';
 
 const OVERVIEW_LABEL_MARGIN = 60;
@@ -126,9 +126,9 @@ export class OverviewIntegration {
         if (cached !== undefined)
             return cached;
 
-        const connector = connectorForMonitorIndex(index);
-        const height = connector
-            ? resolveSizing(this._settings, connector)['panel-height']
+        const identity = identityForMonitorIndex(index);
+        const height = identity
+            ? resolveSizing(this._settings, identity)['panel-height']
             : this._panelHeight;
         this._monitorHeights.set(index, height);
         return height;
