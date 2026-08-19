@@ -47,6 +47,12 @@ export class PanelAutoHideController {
     }
 
     enable() {
+        this._positionActor.connectObject(
+            'notify::y', () => this._syncClip(),
+            'notify::height', () => this._syncClip(),
+            'notify::width', () => this._syncClip(),
+            this._signalHolder
+        );
         this._panelActor.connectObject(
             'enter-event', () => {
                 this.show();
@@ -110,6 +116,7 @@ export class PanelAutoHideController {
         this._hidden = false;
         this._overviewSuspended = false;
         this._positionActor.remove_transition('y');
+        this._positionActor.remove_clip();
         this.syncPosition();
         this._restoreStrutTracking();
         this._restoreUnredirect();
@@ -437,6 +444,7 @@ export class PanelAutoHideController {
         actor.remove_transition('y');
         if (!animate) {
             actor.y = y;
+            this._syncClip();
             Main.layoutManager._queueUpdateRegions();
             return;
         }
@@ -447,5 +455,34 @@ export class PanelAutoHideController {
             mode: Clutter.AnimationMode.EASE_OUT_QUAD,
             onComplete: () => Main.layoutManager._queueUpdateRegions(),
         });
+    }
+
+    // Hiding slides the panel past its own monitor's edge. Nothing stops it
+    // being drawn there, so on a monitor stacked directly above or below
+    // another one the hidden panel lands on the neighbouring screen instead
+    // of leaving view. Paint only the part that is still on its own monitor.
+    _syncClip() {
+        const actor = this._positionActor;
+        const monitor = this._getMonitor();
+        if (!actor || !monitor)
+            return;
+
+        const height = actor.height;
+        if (!height)
+            return;
+
+        const top = Math.max(actor.y, monitor.y);
+        const bottom = Math.min(actor.y + height, monitor.y + monitor.height);
+        if (bottom <= top) {
+            actor.set_clip(0, 0, actor.width, 0);
+            return;
+        }
+
+        if (top === actor.y && bottom === actor.y + height) {
+            actor.remove_clip();
+            return;
+        }
+
+        actor.set_clip(0, top - actor.y, actor.width, bottom - top);
     }
 }
