@@ -1,7 +1,7 @@
 imports.gi.versions.Gtk = '4.0';
 imports.gi.versions.Adw = '1';
 imports.gi.versions.Gdk = '4.0';
-const {Gio, Gtk, Adw, GLib} = imports.gi;
+const {Gio, Gtk, Adw, Gdk, GLib} = imports.gi;
 
 Gio.resources_register(Gio.Resource.load(
     '/usr/share/gnome-shell/org.gnome.Shell.Extensions.src.gresource'));
@@ -38,6 +38,30 @@ function walk(w, out = []) {
     return out;
 }
 const all = () => walk(window);
+
+// Connector names depend on which dock the machine is plugged into, so the
+// test picks whatever is attached rather than naming monitors.
+const MONITORS = (() => {
+    const list = [];
+    const monitors = Gdk.Display.get_default().get_monitors();
+    for (let i = 0; i < monitors.get_n_items(); i++) {
+        const monitor = monitors.get_item(i);
+        const geometry = monitor.get_geometry();
+        list.push({
+            connector: monitor.connector,
+            resolution: `${geometry.width}×${geometry.height}`,
+        });
+    }
+    return list;
+})();
+if (MONITORS.length < 2) {
+    print('SKIP: needs at least two connected monitors');
+    imports.system.exit(0);
+}
+const [TARGET, OTHER] = MONITORS;
+// Expected expander subtitle for a monitor at a given resolved size.
+const sub = (monitor, panel, icons) =>
+    `${monitor.connector} · ${monitor.resolution} · Panel ${panel} px · Icons ${icons} px`;
 const expanderFor = connector => all().find(w =>
     w instanceof Adw.ExpanderRow && w.subtitle?.startsWith(`${connector} ·`));
 // The scale is still an Adw.SpinRow; override rows are ActionRows carrying a
@@ -66,25 +90,25 @@ const check = (name, actual, expected) => {
 const stored = () => Sizing.readMonitorSizing(settings);
 
 // --- toggling a monitor on
-const dp6 = expanderFor('DP-6');
-check('DP-6 starts off', dp6.enable_expansion, false);
+const dp6 = expanderFor(TARGET.connector);
+check('the target monitor starts off', dp6.enable_expansion, false);
 check('nothing stored initially', stored(), {});
 dp6.enable_expansion = true;
 check('toggle writes an entry', stored(), {
-    'DP-6': {enabled: true, scale: 100, overrides: {}},
+    [TARGET.connector]: {enabled: true, scale: 100, overrides: {}},
 });
 check('subtitle still shows globals',
-    dp6.subtitle, 'DP-6 · 1080×1920 · Panel 62 px · Icons 43 px');
+    dp6.subtitle, sub(TARGET, 62, 43));
 
 // --- scale
 const scale = rowsUnder(dp6, 'Scale (%)')[0];
 scale.set_value(61);
-check('scale stored', stored()['DP-6'].scale, 61);
+check('scale stored', stored()[TARGET.connector].scale, 61);
 check('subtitle reflects the scaled result',
-    dp6.subtitle, 'DP-6 · 1080×1920 · Panel 43 px · Icons 26 px');
-check('other monitors untouched', stored()['DP-9'], undefined);
-check('eDP-1 still global',
-    expanderFor('eDP-1').subtitle, 'eDP-1 · 1920×1200 · Panel 62 px · Icons 43 px');
+    dp6.subtitle, sub(TARGET, 43, 26));
+check('other monitors untouched', stored()[OTHER.connector], undefined);
+check('the other monitor is still global',
+    expanderFor(OTHER.connector).subtitle, sub(OTHER, 62, 43));
 
 // --- explicit override
 const height = overrideRow(dp6, 'Panel Height');
@@ -97,9 +121,9 @@ check('an untouched row offers no reset', height.reset.visible, false);
 check('override rows are native spin rows',
     height.row instanceof Adw.SpinRow, true);
 height.spin.set_value(40);
-check('override stored', stored()['DP-6'].overrides, {'panel-height': 40});
+check('override stored', stored()[TARGET.connector].overrides, {'panel-height': 40});
 check('override shrinks the icon in the subtitle',
-    dp6.subtitle, 'DP-6 · 1080×1920 · Panel 40 px · Icons 23 px');
+    dp6.subtitle, sub(TARGET, 40, 23));
 
 // --- rows say whether they follow the scale, and offer a reset when pinned
 const spacing = overrideRow(dp6, 'Icon Spacing');
@@ -114,55 +138,55 @@ check('icon row follows the pinned height down',
     overrideRow(dp6, 'Icon Size').spin.get_value(), 23);
 spacing.spin.set_value(5);
 check('editing a row pins it', spacing.row.subtitle, 'Overriding the scale');
-check('edit stored', stored()['DP-6'].overrides['icon-spacing'], 5);
+check('edit stored', stored()[TARGET.connector].overrides['icon-spacing'], 5);
 spacing.reset.emit('clicked');
 check('reset hands the row back to the scale',
     spacing.row.subtitle, 'Following the scale');
 check('reset drops only that override',
-    stored()['DP-6'].overrides, {'panel-height': 40});
+    stored()[TARGET.connector].overrides, {'panel-height': 40});
 check('reset restores the scaled value', spacing.spin.get_value(), 2);
 
 // --- clearing overrides
 const clearButton = walk(dp6).find(w =>
     w instanceof Gtk.Button && w.label === 'Clear');
 clearButton.emit('clicked');
-check('overrides cleared', stored()['DP-6'].overrides, {});
-check('scale survives the clear', stored()['DP-6'].scale, 61);
+check('overrides cleared', stored()[TARGET.connector].overrides, {});
+check('scale survives the clear', stored()[TARGET.connector].scale, 61);
 check('cleared rows follow the scale again',
     overrideRow(dp6, 'Panel Height').row.subtitle, 'Following the scale');
 check('cleared rows show the scaled value',
     overrideRow(dp6, 'Panel Height').spin.get_value(), 43);
 check('subtitle back to the scaled result',
-    dp6.subtitle, 'DP-6 · 1080×1920 · Panel 43 px · Icons 26 px');
+    dp6.subtitle, sub(TARGET, 43, 26));
 
 // --- external changes flow back into the widgets
 Sizing.writeMonitorSizing(settings, {
-    'DP-6': {enabled: true, scale: 80, overrides: {'icon-size': 30}},
+    [TARGET.connector]: {enabled: true, scale: 80, overrides: {'icon-size': 30}},
 });
 check('external scale synced', scale.get_value(), 80);
 check('external override synced',
     overrideRow(dp6, 'Icon Size').spin.get_value(), 30);
 check('external subtitle synced',
-    dp6.subtitle, 'DP-6 · 1080×1920 · Panel 50 px · Icons 30 px');
+    dp6.subtitle, sub(TARGET, 50, 30));
 
 // --- switching a monitor back off
 dp6.enable_expansion = false;
-check('disabled entry kept but inactive', stored()['DP-6'].enabled, false);
+check('disabled entry kept but inactive', stored()[TARGET.connector].enabled, false);
 check('subtitle back to globals',
-    dp6.subtitle, 'DP-6 · 1080×1920 · Panel 62 px · Icons 43 px');
+    dp6.subtitle, sub(TARGET, 62, 43));
 
 // --- changing a global value refreshes every monitor
 settings.set_int('panel-height', 60);
 check('global change refreshes the scaled monitor',
-    expanderFor('DP-9').subtitle, 'DP-9 · 2560×1440 · Panel 60 px · Icons 43 px');
+    expanderFor(OTHER.connector).subtitle, sub(OTHER, 60, 43));
 settings.set_int('panel-height', 62);
 
 // --- regression: at a high scale the resolved values sit at the schema
 // maxima. Rows must still show those, not the bottom of the range.
 Sizing.writeMonitorSizing(settings, {
-    'DP-6': {enabled: true, scale: 150, overrides: {}},
+    [TARGET.connector]: {enabled: true, scale: 150, overrides: {}},
 });
-const high = Sizing.resolveSizing(settings, 'DP-6');
+const high = Sizing.resolveSizing(settings, TARGET.connector);
 check('a high scale is applied rather than truncated',
     [high['panel-height'], high['icon-size']], [93, 65]);
 check('height row shows the scaled value',
@@ -175,6 +199,6 @@ check('a large icon warns about upscaled artwork',
 const iconRow = overrideRow(dp6, 'Icon Size');
 iconRow.spin.set_value(iconRow.spin.get_value() - 1);
 check('stepping down from a large value moves by one',
-    Sizing.resolveSizing(settings, 'DP-6')['icon-size'], 64);
+    Sizing.resolveSizing(settings, TARGET.connector)['icon-size'], 64);
 
 print(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
