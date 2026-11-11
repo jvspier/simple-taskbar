@@ -28,7 +28,9 @@ export const TEST_GLOBALS = {
 export const EXTENSION_DIR = GLib.path_get_dirname(GLib.path_get_dirname(
     GLib.filename_from_uri(import.meta.url)[0]));
 
-export function createIsolatedSettings(extensionDir = EXTENSION_DIR) {
+// The raw schema objects, for code that builds its own routed settings,
+// plus a routed view over them like the one the extension uses.
+export function createIsolatedStore(extensionDir = EXTENSION_DIR) {
     const source = Gio.SettingsSchemaSource.new_from_directory(
         `${extensionDir}/schemas`,
         Gio.SettingsSchemaSource.get_default(),
@@ -44,11 +46,16 @@ export function createIsolatedSettings(extensionDir = EXTENSION_DIR) {
         settings_schema: source.lookup(id, true),
         backend,
     });
-    const settings = createRoutedSettings(
-        create(SCHEMA_ID), create(`${SCHEMA_ID}.legacy`));
+    const main = create(SCHEMA_ID);
+    const legacy = create(`${SCHEMA_ID}.legacy`);
+    const settings = createRoutedSettings(main, legacy);
     for (const [key, value] of Object.entries(TEST_GLOBALS))
         settings.set_int(key, value);
-    return settings;
+    return {main, legacy, settings};
+}
+
+export function createIsolatedSettings(extensionDir = EXTENSION_DIR) {
+    return createIsolatedStore(extensionDir).settings;
 }
 
 let failures = 0;

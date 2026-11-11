@@ -15,6 +15,7 @@ import {addDockBehaviorGroup} from './src/prefs/dockBehaviorGroup.js';
 import {addTaskbarBehaviorGroup} from './src/prefs/taskbarBehaviorGroup.js';
 import {createBlurMyShellState} from './src/prefs/blurMyShellState.js';
 import {addPanelAppearancePage} from './src/prefs/panelAppearancePage.js';
+import {addPerMonitorSizingGroup} from './src/prefs/perMonitorSizingGroup.js';
 import {addPanelItemsPage} from './src/prefs/panelItemsPage.js';
 import {addDockItemsPage} from './src/prefs/dockItemsPage.js';
 import {addLocationsGroup} from './src/prefs/locationsGroup.js';
@@ -129,6 +130,9 @@ export default class SimpleTaskbarPreferences extends ExtensionPreferences {
             dockAppearance.syncTransparency,
             dockAppearance.syncCustomColor
         );
+        // One shared configuration, reachable from both hubs.
+        for (const page of [taskbar.size, dock.size])
+            addPerMonitorSizingGroup({page, settings, connectSettings});
 
         addTaskbarBehaviorGroup({
             visibilityPage: taskbar.visibility,

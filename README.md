@@ -248,6 +248,11 @@ pinning anywhere updates the taskbar, the Dock and GNOME's own Dash together.
   the focused application's windows, the focused window or maximized windows, with adjustable
   trigger distance, transparency when no window matches, and animation duration
 - **Blur My Shell** translucency and blur on primary and secondary panels, with Simple Taskbar's own background as the fallback on secondary panels
+- **Per-monitor sizing** for mixed-density setups: each monitor can scale the thickness,
+  icon size, spacing and paddings by 50–150%, or override individual values, for the taskbar
+  and the Dock alike. Monitors are recognised by the vendor, model and serial they report,
+  so a screen keeps its sizes when a dock renumbers its port. A monitor uses the shared
+  values until per-monitor sizing is switched on for it
 
 ### Behaviour
 
@@ -408,6 +413,11 @@ scans them.
 For runtime problems, use Looking Glass or the journal:
 
     journalctl -f -o cat /usr/bin/gnome-shell
+
+Tests run against a throwaway settings store and never touch the real
+configuration:
+
+    tests/run.sh
 
 ### Build a package
 
