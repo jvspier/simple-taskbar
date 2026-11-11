@@ -526,6 +526,11 @@
       <default>['left-box', 'center-box', 'right-box', 'start-button', 'activities', 'applications', 'folder-menu', 'tray-overflow', 'system-menu', 'clock', 'show-desktop']</default>
       <summary>Panel item order within each position</summary>
     </key>
+    <key name="per-monitor-sizing" type="s">
+      <default>'{}'</default>
+      <summary>Per-monitor sizing overrides</summary>
+      <description>JSON object keyed by monitor identity (EDID vendor, product and serial). Each entry holds an "enabled" flag, a "scale" percentage applied to the global sizing values, and an "overrides" object with explicit values for individual sizing keys</description>
+    </key>
     <key name="multi-monitor-panels" type="b">
       <default>true</default>
       <summary>Show taskbar panels on every connected monitor</summary>
