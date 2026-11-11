@@ -20,7 +20,11 @@ import {panelPosition, positionIsVertical} from '../shared/panelPositionUtils.js
 import {
     dockPanelModeHeight,
     panelHeightForIconSize,
+    taskbarPanelHeight,
 } from '../shared/panelSizing.js';
+import {identityForMonitorIndex} from '../shared/monitorIdentity.js';
+import {MonitorSizedSettings} from '../shared/monitorSizedSettings.js';
+import {SIZING_SETTING_KEY} from '../shared/monitorSizing.js';
 import {dockFloatingEnabled, floatingTaskbarEnabled} from '../shared/panelModeSettings.js';
 import {CachedSettings} from '../shared/remappedSettings.js';
 import {DOCK_AUTO_HIDE_SETTINGS, autoHideRevealsInOverview} from '../shared/autoHideSettings.js';
@@ -47,7 +51,9 @@ function insetBoxEdge(box, position, inset) {
 export class OverviewIntegration {
     constructor(panelHeight, settings) {
         this._panelHeight = panelHeight;
+        this._rawSettings = settings;
         this._settings = new CachedSettings(settings);
+        this._monitorSettings = new Map();
         this._dashState = null;
         this._dashVisibilityRepairId = 0;
         this._injectionManager = new InjectionManager();
@@ -102,8 +108,14 @@ export class OverviewIntegration {
         this._settings.connectObject(
             'changed::dock-floating-gap', () => this.queueRelayout(),
             'changed::dock-highlight-edge-gap', () => this.queueRelayout(),
+            `changed::${SIZING_SETTING_KEY}`, () => this.queueRelayout(),
+            'changed::panel-height', () => this.queueRelayout(),
             this
         );
+        Main.layoutManager.connectObject('monitors-changed', () => {
+            this._clearMonitorSettings();
+            this.queueRelayout();
+        }, this);
         Main.overview.connectObject(
             'window-drag-begin',
             (_overview, window) => this._beginMaximizedWindowDrag(window),
@@ -165,8 +177,34 @@ export class OverviewIntegration {
         this.queueRelayout();
         this._maximizedWindowDrag = null;
         this._tracker = null;
+        this._clearMonitorSettings();
+        this._monitorSettings = null;
         this._settings.destroy();
         this._settings = null;
+        this._rawSettings = null;
+    }
+
+    // Settings as seen by the panels on one monitor, whose sizes may differ
+    // from the primary panel's when per-monitor sizing is configured.
+    _settingsForMonitor(monitorIndex) {
+        if (!Number.isInteger(monitorIndex))
+            return this._settings;
+
+        let settings = this._monitorSettings.get(monitorIndex);
+        if (!settings) {
+            settings = new CachedSettings(new MonitorSizedSettings(
+                this._rawSettings,
+                identityForMonitorIndex(monitorIndex)
+            ));
+            this._monitorSettings.set(monitorIndex, settings);
+        }
+        return settings;
+    }
+
+    _clearMonitorSettings() {
+        for (const settings of this._monitorSettings.values())
+            settings.destroy();
+        this._monitorSettings.clear();
     }
 
     setPanelHeight(panelHeight) {
@@ -469,27 +507,39 @@ export class OverviewIntegration {
                         0,
                         1
                     );
-                    const inset = integration._panelOverviewInset() * progress;
+                    const inset = integration._panelOverviewInset(
+                        this._monitorIndex
+                    ) * progress;
                     const position = panelPosition(integration._settings);
                     insetBoxEdge(box, position, inset);
                 }
                 integration._reserveDockSpace(
                     box,
                     this._overviewAdjustment,
-                    false
+                    false,
+                    this._monitorIndex
                 );
                 originalAllocate.call(this, box);
             }
         );
     }
 
-    _panelOverviewInset() {
+    // Without a monitor index this is the primary panel, whose live height
+    // is known; secondary panels are sized from their monitor's settings.
+    _panelOverviewInset(monitorIndex = null) {
+        let panelHeight = this._panelHeight;
+        if (Number.isInteger(monitorIndex) &&
+            monitorIndex !== Main.layoutManager.primaryIndex) {
+            const settings = this._settingsForMonitor(monitorIndex);
+            panelHeight = taskbarPanelHeight(settings, settings.get_int('icon-size'));
+        }
         return floatingTaskbarEnabled(this._settings)
-            ? this._panelHeight + this._settings.get_int('taskbar-floating-gap')
-            : this._panelHeight;
+            ? panelHeight + this._settings.get_int('taskbar-floating-gap')
+            : panelHeight;
     }
 
-    _reserveDockSpace(box, overviewAdjustment, primaryMonitor) {
+    _reserveDockSpace(box, overviewAdjustment, primaryMonitor,
+        monitorIndex = Main.layoutManager.primaryIndex) {
         if (!this._settings.get_boolean('dock-mode') ||
             (!primaryMonitor && !this._settings.get_boolean(
                 'dock-multi-monitor-panels'
@@ -506,10 +556,11 @@ export class OverviewIntegration {
         if (dockAutohide && !this._settings.get_boolean(DOCK_AUTO_HIDE_SETTINGS.revealOverview))
             return;
 
-        const iconSize = this._settings.get_int('icon-size');
+        const sizedSettings = this._settingsForMonitor(monitorIndex);
+        const iconSize = sizedSettings.get_int('icon-size');
         const dockThickness = this._settings.get_boolean('dock-panel-mode')
-            ? dockPanelModeHeight(this._settings, iconSize)
-            : panelHeightForIconSize(this._settings, iconSize) +
+            ? dockPanelModeHeight(sizedSettings, iconSize)
+            : panelHeightForIconSize(sizedSettings, iconSize) +
                 this._settings.get_int('dock-highlight-edge-gap') * 2;
         const dockHeight = dockThickness +
             (dockFloatingEnabled(this._settings) ? this._settings.get_int('dock-floating-gap') : 0);

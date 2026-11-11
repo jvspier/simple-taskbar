@@ -24,6 +24,8 @@ import {PanelManagerBase} from '../panel/panelManagerBase.js';
 import {alternativePanelPosition} from '../shared/panelPositionUtils.js';
 import {setDockPosition} from '../shared/panelModeProfiles.js';
 import {DockPanelSettings} from './dockPanelSettings.js';
+import {identityForMonitor} from '../shared/monitorIdentity.js';
+import {MonitorSizedSettings} from '../shared/monitorSizedSettings.js';
 
 const DOCK_PANEL_ITEM_IDS = new Set([
     'start-button',
@@ -144,7 +146,10 @@ export class DockPanelManager extends PanelManagerBase {
             ? Main.layoutManager.monitors
             : [Main.layoutManager.primaryMonitor];
         for (const monitor of monitors) {
-            const dockSettings = new DockPanelSettings(this._settings);
+            const dockSettings = new DockPanelSettings(new MonitorSizedSettings(
+                this._settings,
+                identityForMonitor(monitor)
+            ));
             const panel = new ExtensionPanelController({
                 ...this._panelOptions(dockSettings, monitor),
                 visiblePanelItemIds: DOCK_PANEL_ITEM_IDS,

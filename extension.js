@@ -12,6 +12,9 @@ import {cachedPanelApplicationSettings} from './src/shared/defaultPanelWindowSet
 import {panelApplicationsEnabled} from './src/shared/panelApplicationVisibility.js';
 import {taskbarPanelHeight} from './src/shared/panelSizing.js';
 import {createRoutedSettings} from './src/shared/routedSettings.js';
+import {MonitorSizedSettings} from './src/shared/monitorSizedSettings.js';
+import {monitorKey} from './src/shared/monitorSizing.js';
+import {primaryIdentity} from './src/shared/monitorIdentity.js';
 
 import {ExtensionConflictController} from './src/integration/extensionConflictController.js';
 import {FolderMenuController} from './src/panel/folderMenuController.js';
@@ -88,10 +91,17 @@ export default class SimpleTaskbarExtension extends Extension {
             },
         });
         this._panelModeController.applyInitialSettings();
-        this._applicationSettings = cachedPanelApplicationSettings(this._settings);
+        // Sizing for the primary panel as configured for the primary monitor.
+        // Corrections and other global writes keep using this._settings.
+        this._primaryIdentity = primaryIdentity();
+        this._sizedSettings = new MonitorSizedSettings(
+            this._settings,
+            this._primaryIdentity
+        );
+        this._applicationSettings = cachedPanelApplicationSettings(this._sizedSettings);
         const maximumIconSize = this._applicationSettings.get_int('icon-size');
         const iconSize = panelTaskbarIconSize(this._applicationSettings, maximumIconSize);
-        this._panelHeight = taskbarPanelHeight(this._settings, iconSize);
+        this._panelHeight = taskbarPanelHeight(this._sizedSettings, iconSize);
         this._overviewIntegration = new OverviewIntegration(
             this._panelHeight,
             this._settings
@@ -221,7 +231,7 @@ export default class SimpleTaskbarExtension extends Extension {
         this._overviewIntegration.enable();
         this._panelModeController.enable();
         connectPanelSizingSignals({
-            settings: this._settings,
+            settings: this._sizedSettings,
             owner: this,
             core: this._core,
             correctSetting: key => this._panelModeController.correctSizingSetting(key),
@@ -256,6 +266,7 @@ export default class SimpleTaskbarExtension extends Extension {
             this._closingPrefsWindow = null;
         }
         this._settings.disconnectObject(this);
+        Main.layoutManager.disconnectObject(this);
         this._applicationSettings.disconnectObject(this);
         this._appGridLayout.destroy();
         this._appGridLayout = null;
@@ -312,6 +323,8 @@ export default class SimpleTaskbarExtension extends Extension {
         this._applicationSettings.destroy();
         this._applicationSettings = null;
         this._settings = null;
+        this._sizedSettings = null;
+        this._primaryIdentity = null;
         this._panelHeight = null;
     }
 
@@ -394,6 +407,13 @@ export default class SimpleTaskbarExtension extends Extension {
             () => this._queueRebuild(),
             this
         );
+        // The primary panel is sized for the screen that was primary when it
+        // was built.
+        Main.layoutManager.connectObject('monitors-changed', () => {
+            if (monitorKey(primaryIdentity() ?? {}) !==
+                monitorKey(this._primaryIdentity ?? {}))
+                this._queueRebuild();
+        }, this);
         this._settings.connectObject('changed::panel-position', () => {
             synchronizePanelPosition(this._settings);
             hidePanelBlur();
@@ -412,14 +432,14 @@ export default class SimpleTaskbarExtension extends Extension {
     }
 
     _applyPanelHeight() {
-        this._panelHeight = taskbarPanelHeight(this._settings, this._core.iconSizer.iconSize);
+        this._panelHeight = taskbarPanelHeight(this._sizedSettings, this._core.iconSizer.iconSize);
         this._core.taskbarController.setPanelHeight(this._panelHeight);
         this._overviewIntegration.setPanelHeight(this._panelHeight);
         this._primaryPanelController.setPanelHeight(this._panelHeight);
     }
 
     _syncPanelHeight() {
-        if (taskbarPanelHeight(this._settings, this._core.iconSizer.iconSize) !== this._panelHeight)
+        if (taskbarPanelHeight(this._sizedSettings, this._core.iconSizer.iconSize) !== this._panelHeight)
             this._applyPanelHeight();
     }
 

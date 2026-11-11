@@ -14,6 +14,8 @@ import {
 } from '../integration/blurMyShellRuntime.js';
 import {PanelManagerBase} from '../panel/panelManagerBase.js';
 import {ExtensionPanelController} from '../panel/extensionPanelController.js';
+import {identityForMonitor} from '../shared/monitorIdentity.js';
+import {MonitorSizedSettings} from '../shared/monitorSizedSettings.js';
 
 export class SecondaryPanelManager extends PanelManagerBase {
     enable() {
@@ -75,7 +77,10 @@ export class SecondaryPanelManager extends PanelManagerBase {
             if (monitor === primaryMonitor)
                 continue;
 
-            const panel = new ExtensionPanelController(this._panelOptions(this._settings, monitor));
+            const panel = new ExtensionPanelController(this._panelOptions(
+                new MonitorSizedSettings(this._settings, identityForMonitor(monitor)),
+                monitor
+            ));
             this._panels.push(panel);
             panel.enable();
         }
